@@ -1,0 +1,98 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:17
+    container_name: celery-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: celery_jobs
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - celery-network
+
+  # Redis Broker
+  redis:
+    image: redis:7-alpine
+    container_name: celery-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - celery-network
+
+  # FastAPI Application
+  api:
+    build:
+      context: .
+      dockerfile: celery-app/Dockerfile
+    container_name: celery-api
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: celery_jobs
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./celery-app:/app/celery-app
+      - ./packages:/app/packages
+    command: python -m celery_app
+    networks:
+      - celery-network
+
+  # Celery Worker
+  worker:
+    build:
+      context: .
+      dockerfile: celery-worker/Dockerfile
+    container_name: celery-worker
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: celery_jobs
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./celery-worker:/app/celery-worker
+      - ./packages:/app/packages
+    command: python -m celery_worker
+    networks:
+      - celery-network
+
+volumes:
+  postgres_data:
+
+networks:
+  celery-network:
+    driver: bridge
+    name: celery-network
