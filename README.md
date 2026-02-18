@@ -12,7 +12,7 @@ docker-compose up -d
 |--------|------|------|
 | RabbitMQ | 5672 / 15672 (UI) | 메시지 브로커 |
 | PostgreSQL | 5432 | 결과 백엔드 |
-| Redis | 6379 / 8001 (UI) | 결과 백엔드 (practice03) |
+| Redis | 6379 / 8001 (UI) | 결과 백엔드 |
 
 **접속 정보 (`global_config.py`)**
 ```python
