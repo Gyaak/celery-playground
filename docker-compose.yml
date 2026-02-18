@@ -1,98 +1,41 @@
 version: "3.8"
 
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:17
-    container_name: celery-postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: celery_jobs
+  redis-stack:
+    image: redis/redis-stack:latest
+    container_name: celery-redis-stack
     ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - celery-network
-
-  # Redis Broker
-  redis:
-    image: redis:7-alpine
-    container_name: celery-redis
-    ports:
-      - "6379:6379"
+      - "6379:6379"   # Redis
+      - "8001:8001"   # Redis Insight (Web UI)
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
-    networks:
-      - celery-network
-
-  # FastAPI Application
-  api:
-    build:
-      context: .
-      dockerfile: celery-app/Dockerfile
-    container_name: celery-api
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: celery_jobs
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+  
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: celery-rabbitmq
     ports:
-      - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./celery-app:/app/celery-app
-      - ./packages:/app/packages
-    command: python -m celery_app
-    networks:
-      - celery-network
-
-  # Celery Worker
-  worker:
-    build:
-      context: .
-      dockerfile: celery-worker/Dockerfile
-    container_name: celery-worker
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+  
+  postgres:
+    image: postgres:17
+    container_name: celery-postgres
+    ports:
+      - "5432:5432"
     environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: celery_jobs
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./celery-worker:/app/celery-worker
-      - ./packages:/app/packages
-    command: python -m celery_worker
-    networks:
-      - celery-network
-
-volumes:
-  postgres_data:
-
-networks:
-  celery-network:
-    driver: bridge
-    name: celery-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
